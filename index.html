@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HMRC Demo – Minimal Working Mock</title>
+
+  <!-- Tailwind via CDN (fine for demos) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { gov: { blue: '#1d70b8', dark: '#0b0c0c', light: '#f3f2f1', green: '#00703c' } },
+          fontFamily: { sans: ["Arial","Helvetica Neue","Inter","system-ui","Segoe UI","sans-serif"] }
+        }
+      }
+    };
+  </script>
+  <style>
+    :focus-visible { outline: 3px solid #ffdd00; outline-offset: 0; box-shadow: 0 0 0 3px #0b0c0c inset; }
+  </style>
+</head>
+
+<body class="bg-gov-light text-gov-dark font-sans">
+  <header class="bg-white border-b border-gray-200">
+    <div class="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded bg-gov-dark text-white grid place-content-center text-sm font-bold select-none">HM</div>
+        <div>
+          <div class="text-lg font-bold leading-5">HM Revenue & Customs</div>
+          <div class="text-xs text-gray-500">Demo prototype – synthetic data</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-4xl px-4 mt-6 mb-24 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <section class="lg:col-span-2 space-y-6">
+      <div class="bg-white rounded-xl shadow border border-gray-200">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h1 class="text-xl font-bold">Your overview</h1>
+          <div id="authState" class="text-sm text-gray-600">Signed out</div>
+        </div>
+        <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <dl class="divide-y divide-gray-200">
+            <div class="py-3 flex justify-between gap-4"><dt class="text-gray-600">Name</dt><dd id="name" class="font-medium">—</dd></div>
+            <div class="py-3 flex justify-between gap-4"><dt class="text-gray-600">NI number</dt><dd id="ni" class="font-mono">—</dd></div>
+            <div class="py-3 flex justify-between gap-4"><dt class="text-gray-600">Tax year</dt><dd id="taxYear">—</dd></div>
+          </dl>
+          <div class="rounded-lg border border-gray-200 p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-600">Balance due</span>
+              <span id="eligibilityBadge" class="text-xs px-2 py-1 rounded bg-gray-100">Eligibility: —</span>
+            </div>
+            <div class="mt-2 text-3xl font-bold" id="balance">—</div>
+            <div class="mt-1 text-sm text-gray-600">Due <span id="dueDate">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow border border-gray-200" aria-live="polite">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-lg font-bold">Payment plan options</h2>
+          <div class="text-sm text-gray-600">Choose a plan or ask the assistant</div>
+        </div>
+        <div id="planOptions" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <p class="text-sm text-gray-600">Use the buttons in the Assistant to populate options.</p>
+        </div>
+      </div>
+
+      <!-- Inline chart (no external libs) -->
+      <div class="bg-white rounded-xl shadow border border-gray-200" id="chartCard" hidden>
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-lg font-bold">Balance over time</h2>
+          <div class="text-sm text-gray-600">Updates when a plan is selected</div>
+        </div>
+        <div class="p-5"><canvas id="balanceCanvas" height="180" style="width:100%" aria-label="Balance chart" role="img"></canvas></div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow border border-gray-200" id="scheduleCard" hidden>
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-lg font-bold">Direct Debit schedule</h2>
+        </div>
+        <div class="p-5 overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-600"><th class="py-2 pr-6">#</th><th class="py-2 pr-6">Date</th><th class="py-2 pr-6">Amount</th><th class="py-2 pr-6">Status</th></tr>
+            </thead>
+            <tbody id="scheduleBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="space-y-6">
+      <div class="bg-white rounded-xl shadow border border-gray-200">
+        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold">Assistant</h3>
+          <span class="text-xs text-gray-500">Demo controls</span>
+        </div>
+        <div class="p-4 space-y-3">
+          <div id="transcript" class="text-sm bg-gray-50 rounded p-3 h-40 overflow-auto border border-gray-200"></div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="demo-btn rounded bg-gov-blue text-white px-3 py-1.5 text-sm" data-demo="authenticate">Simulate sign in</button>
+            <button type="button" class="demo-btn rounded bg-green-600 text-white px-3 py-1.5 text-sm" data-demo="eligibility">Send eligibility</button>
+            <button type="button" class="demo-btn rounded bg-gov-blue text-white px-3 py-1.5 text-sm" data-demo="options">Show plan options</button>
+            <button type="button" class="demo-btn rounded bg-gov-green text-white px-3 py-1.5 text-sm" data-demo="confirm">Confirm plan</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="border-t border-gray-200 bg-white">
+    <div class="mx-auto max-w-4xl px-4 py-8 text-sm text-gray-600">© Crown copyright (demo). Synthetic data.</div>
+  </footer>
+
+  <!-- Load Cognigy Webchat (GitHub Releases) -->
+  <!-- Bridge + init (no registerPlugin needed) -->
+<script>
+  (function () {
+    var CONFIG_URL = "https://endpoint-trial.cognigy.ai/dddb5ff2729a9e6000017a4bc41ea7952bd51e4f230aeb0f5884918c2cefc3ee";
+
+    // 1) Pre-init plugin hook (for builds that read window.cognigyWebchatPlugins)
+    window.cognigyWebchatPlugins = [
+      function (webchat) {
+        attachBridge(webchat);
+      }
+    ];
+
+    // 2) Extractor for your payload shape
+    function extractWebapp(out){
+      if (out && out.data && out.data.data && out.data.data._webapp) return out.data.data._webapp; // output.data.data._webapp
+      if (out && out.data && out.data._webapp) return out.data._webapp;                              // alt nesting
+      if (out && out._webapp) return out._webapp;                                                    // bare
+      return null;
+    }
+
+    // 3) Our bridge: listen for bot messages and dispatch DOM events your app.js listens for
+    function attachBridge(webchat){
+      console.log("[bridge] attached");
+
+      // Your environment emits 'output'
+      webchat.on("output", function (out) {
+        console.log("[bridge] output:", out);
+        var w = extractWebapp(out);
+        if (w && w.type) {
+          console.log("[bridge] DISPATCH:", w.type, w.payload || {});
+          window.dispatchEvent(new CustomEvent(w.type, { detail: w.payload || {} }));
+          // belt & braces: optional direct hook
+          if (w.type === "webapp.signin" && typeof window.webappSignin === "function") {
+            window.webappSignin(w.payload || {});
+          }
+        } else {
+          console.log("[bridge] no _webapp on output");
+        }
+      });
+
+      // Keep for completeness (some builds use 'message')
+      webchat.on("message", function (direction, msg) {
+        console.log("[bridge] message:", direction, msg);
+        var w = extractWebapp(msg);
+        if (w && w.type) {
+          console.log("[bridge] DISPATCH (message):", w.type, w.payload || {});
+          window.dispatchEvent(new CustomEvent(w.type, { detail: w.payload || {} }));
+          if (w.type === "webapp.signin" && typeof window.webappSignin === "function") {
+            window.webappSignin(w.payload || {});
+          }
+        }
+      });
+    }
+
+    // 4) Init the widget and attach the bridge directly (works when registerPlugin is absent)
+    if (typeof initWebchat !== "function") {
+      console.error("[bridge] webchat.js not loaded (initWebchat missing)");
+      return;
+    }
+
+    initWebchat(CONFIG_URL, {
+      settings: { enableConnectionStatusIndicator: true, showCloseButton: true }
+    }).then(function (webchat) {
+      window._webchat = webchat;
+      attachBridge(webchat);  // <-- direct attach (no registerPlugin)
+      webchat.open();
+      console.log("[bridge] webchat ready");
+    }).catch(function (e) {
+      console.error("[bridge] init failed", e);
+    });
+  })();
+</script>
+
+
+  <!-- Your app logic -->
+  <script src="app.js"></script>
+</body>
+</html>
