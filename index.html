@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HMRC Demo – Minimal Working Mock</title>
+
+  <!-- Tailwind via CDN (fine for demos) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { gov: { blue: '#1d70b8', dark: '#0b0c0c', light: '#f3f2f1', green: '#00703c' } },
+          fontFamily: { sans: ["Arial","Helvetica Neue","Inter","system-ui","Segoe UI","sans-serif"] }
+        }
+      }
+    };
+  </script>
+  <style>
+    :focus-visible { outline: 3px solid #ffdd00; outline-offset: 0; box-shadow: 0 0 0 3px #0b0c0c inset; }
+  </style>
+</head>
+
+<body class="bg-gov-light text-gov-dark font-sans">
+  <header class="bg-white border-b border-gray-200">
+    <div class="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded bg-gov-dark text-white grid place-content-center text-sm font-bold select-none">HM</div>
+        <div>
+          <div class="text-lg font-bold leading-5">HM Revenue & Customs</div>
+          <div class="text-xs text-gray-500">Demo prototype – synthetic data</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-4xl px-4 mt-6 mb-24 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <section class="lg:col-span-2 space-y-6">
+      <div class="bg-white rounded-xl shadow border border-gray-200">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h1 class="text-xl font-bold">Your overview</h1>
+          <div id="authState" class="text-sm text-gray-600">Signed out</div>
+        </div>
+        <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <dl class="divide-y divide-gray-200">
+            <div class="py-3 flex justify-between gap-4"><dt class="text-gray-600">Name</dt><dd id="name" class="font-medium">—</dd></div>
+            <div class="py-3 flex justify-between gap-4"><dt class="text-gray-600">NI number</dt><dd id="ni" class="font-mono">—</dd></div>
+            <div class="py-3 flex justify-between gap-4"><dt class="text-gray-600">Tax year</dt><dd id="taxYear">—</dd></div>
+          </dl>
+          <div class="rounded-lg border border-gray-200 p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-600">Balance due</span>
+              <span id="eligibilityBadge" class="text-xs px-2 py-1 rounded bg-gray-100">Eligibility: —</span>
+            </div>
+            <div class="mt-2 text-3xl font-bold" id="balance">—</div>
+            <div class="mt-1 text-sm text-gray-600">Due <span id="dueDate">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow border border-gray-200" aria-live="polite">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-lg font-bold">Payment plan options</h2>
+          <div class="text-sm text-gray-600">Choose a plan or ask the assistant</div>
+        </div>
+        <div id="planOptions" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <p class="text-sm text-gray-600">Use the buttons in the Assistant to populate options.</p>
+        </div>
+      </div>
+
+      <!-- Inline chart (no external libs) -->
+      <div class="bg-white rounded-xl shadow border border-gray-200" id="chartCard" hidden>
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-lg font-bold">Balance over time</h2>
+          <div class="text-sm text-gray-600">Updates when a plan is selected</div>
+        </div>
+        <div class="p-5"><canvas id="balanceCanvas" height="180" style="width:100%" aria-label="Balance chart" role="img"></canvas></div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow border border-gray-200" id="scheduleCard" hidden>
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-lg font-bold">Direct Debit schedule</h2>
+        </div>
+        <div class="p-5 overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-600"><th class="py-2 pr-6">#</th><th class="py-2 pr-6">Date</th><th class="py-2 pr-6">Amount</th><th class="py-2 pr-6">Status</th></tr>
+            </thead>
+            <tbody id="scheduleBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="space-y-6">
+      <div class="bg-white rounded-xl shadow border border-gray-200">
+        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold">Assistant</h3>
+          <span class="text-xs text-gray-500">Demo controls</span>
+        </div>
+        <div class="p-4 space-y-3">
+          <div id="transcript" class="text-sm bg-gray-50 rounded p-3 h-40 overflow-auto border border-gray-200"></div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="demo-btn rounded bg-gov-blue text-white px-3 py-1.5 text-sm" data-demo="authenticate">Simulate sign in</button>
+            <button type="button" class="demo-btn rounded bg-green-600 text-white px-3 py-1.5 text-sm" data-demo="eligibility">Send eligibility</button>
+            <button type="button" class="demo-btn rounded bg-gov-blue text-white px-3 py-1.5 text-sm" data-demo="options">Show plan options</button>
+            <button type="button" class="demo-btn rounded bg-gov-green text-white px-3 py-1.5 text-sm" data-demo="confirm">Confirm plan</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="border-t border-gray-200 bg-white">
+    <div class="mx-auto max-w-4xl px-4 py-8 text-sm text-gray-600">© Crown copyright (demo). Synthetic data.</div>
+  </footer>
+
+  <!-- Your app logic (moved out of HTML) -->
+
+<!-- Robust Cognigy Webchat embed with fallbacks + bridge -->
+<script>
+  (function () {
+    var CONFIG_URL = "https://endpoint-trial.cognigy.ai/dddb5ff2729a9e6000017a4bc41ea7952bd51e4f230aeb0f5884918c2cefc3ee"; // paste your real Config URL
+
+    // Unified dispatch helper: looks for _webapp in multiple shapes
+    function extractWebapp(obj) {
+      if (!obj) return null;
+      // common shapes:
+      // 1) output => { data: { text, data: { _webapp } } }
+      if (obj.data && obj.data.data && obj.data.data._webapp) return obj.data.data._webapp;
+      if (obj.data && obj.data._webapp) return obj.data._webapp;
+      // 2) message => { data: { _webapp } } or { _webapp }
+      if (obj._webapp) return obj._webapp;
+      return null;
+    }
+
+    function bridge(webchat) {
+      console.log("[bridge] registered");
+
+      // For widgets that emit 'output' (your case)
+      webchat.on("output", function (out) {
+        console.log("[bridge] output:", out);
+        try {
+          var w = extractWebapp(out);
+          if (w && w.type) {
+            console.log("[bridge] DISPATCH (output):", w.type, w.payload || {});
+            window.dispatchEvent(new CustomEvent(w.type, { detail: w.payload || {} }));
+          } else {
+            console.log("[bridge] no _webapp on output");
+          }
+        } catch (e) { console.error("[bridge] output error", e); }
+      });
+
+      // For widgets/versions that emit 'message' (kept for compatibility)
+      webchat.on("message", function (direction, msg) {
+        console.log("[bridge] message:", direction, msg);
+        try {
+          var w = extractWebapp(msg);
+          if (w && w.type) {
+            console.log("[bridge] DISPATCH (message):", w.type, w.payload || {});
+            window.dispatchEvent(new CustomEvent(w.type, { detail: w.payload || {} }));
+          } else {
+            console.log("[bridge] no _webapp on message");
+          }
+        } catch (e) { console.error("[bridge] message error", e); }
+      });
+    }
+
+    initWebchat(CONFIG_URL, {
+      settings: { enableConnectionStatusIndicator: true, showCloseButton: true }
+    }).then(function (webchat) {
+      window._webchat = webchat;
+      webchat.registerPlugin(bridge);
+      webchat.open(); // auto-open for the test
+      console.log("[bridge] webchat ready");
+    }).catch(function (e) {
+      console.error("[bridge] init failed", e);
+    });
+  })();
+</script>
+
+    // 2) Candidate script sources: CDN → CDN → GitHub Releases
+    var SOURCES = [
+      "https://cdn.jsdelivr.net/npm/@cognigy/webchat-widget@3.52.0/build/webchat.js",
+      "https://unpkg.com/@cognigy/webchat-widget@3.52.0/build/webchat.js",
+      "https://github.com/Cognigy/Webchat/releases/latest/download/webchat.js"
+    ];
+
+    // 3) Bridge plugin: forwards Data {_webapp:{type,payload}} to your app as DOM events
+    function bridge(webchat) {
+      webchat.on("message", function (direction, msg) {
+        try {
+          var w = msg && msg.data && (msg.data._webapp || msg.data.webapp);
+          if (w && w.type) {
+            window.dispatchEvent(new CustomEvent(w.type, { detail: w.payload || {} }));
+          }
+        } catch (e) { console.error("[bridge] error", e); }
+      });
+    }
+
+    // 4) Try loading the widget from each source until initWebchat exists
+    function loadNext() {
+      if (!SOURCES.length) {
+        console.error("[webchat] All sources failed to load");
+        return;
+      }
+      var src = SOURCES.shift();
+      var s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = function () {
+        if (typeof initWebchat !== "function") {
+          console.warn("[webchat] Loaded", src, "but initWebchat not found. Trying next…");
+          loadNext();
+          return;
+        }
+        // 5) Initialize + register the bridge
+        initWebchat(CONFIG_URL, {
+          settings: {
+            enableConnectionStatusIndicator: true,
+            showCloseButton: true
+          }
+        }).then(function (webchat) {
+          window._webchat = webchat;      // handy for debugging in console
+          if (webchat.registerPlugin) { webchat.registerPlugin(bridge); }
+          webchat.open();                  // auto-open for smoke test
+          console.log("[webchat] Ready via", src);
+        }).catch(function (e) {
+          console.error("[webchat] init failed from", src, e);
+        });
+      };
+      s.onerror = function () {
+        console.warn("[webchat] Failed to load", src, "— trying next…");
+        loadNext();
+      };
+      document.head.appendChild(s);
+    }
+
+    loadNext();
+  })();
+</script>
+
+  <script src="app.js"></script>
+</body>
+</html>
